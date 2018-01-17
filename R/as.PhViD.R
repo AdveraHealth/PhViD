@@ -28,8 +28,8 @@ function(DATA.FRAME,MARGIN.THRES=1){
 ##############################################################################                  
 
 data <- DATA.FRAME
-data[,1] <- as.factor(DATA.FRAME[,1])
-data[,2] <- as.factor(DATA.FRAME[,2])
+data[,1] <- as.numeric(DATA.FRAME[,1])
+data[,2] <- as.numeric(DATA.FRAME[,2])
 data[,3] <- as.double(DATA.FRAME[,3])
 #data <- read.table(file=FILE,header=TRUE,sep=";",colClasses=c("factor","factor","double")) 
 
