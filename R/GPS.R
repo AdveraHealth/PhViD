@@ -1,13 +1,20 @@
 `GPS` <-
   function(DATABASE, RR0 = 1, MIN.n11 = 1, DECISION = 1, DECISION.THRES = 0.05, RANKSTAT = 1, TRONC = FALSE, TRONC.THRES = 1, PRIOR.INIT = c(alpha1= 0.2, beta1= 0.06, alpha2=1.4, beta2=1.8, w=0.1), PRIOR.PARAM = NULL){
-    
+    print("[GPS] GPS Initializing.")
     DATA <- DATABASE$data
+    
+    print("[GPS] GPS Initializing - handling N and L")
+  
     N <- DATABASE$N
     L <- DATABASE$L          
-    
+
+    print("[GPS] GPS Initializing - handling n11 margins")    
     n11 <- DATA[,1] # les nij ou n11 (c'est pareil)
+    print("[GPS] GPS Initializing - handling n1 margins")
     n1. <- DATA[,2] # les marges lignes (effets indésirables)
+    print("[GPS] GPS Initializing - handling n.1 margins")
     n.1 <- DATA[,3] # les marges colonnes (médicaments)
+    print("[GPS] GPS Initializing - handling Expected")
     E <- DATA[,2] * DATA[,3] / N # les effectifs attendus      
     
     P_OUT <- TRUE
@@ -18,13 +25,26 @@
       
       if (TRONC == FALSE){  
         # Dumouchel situation (we will consider the whole contingency table with 0)
+        print("[GPS] TRONC ==FALSE - Dumouchel situation (we will consider the whole contingency table with 0")
+        
         data_cont<-xtabs(DATA[,1]~L[,1]+L[,2])
+        print("[GPS] GPS.xtabs finished.")
+        
         n1._mat <- apply(data_cont,1, sum) # on recalcule les marges des lignes...
         n.1_mat <- apply(data_cont,2, sum) # ...et des colonnes
+        print("[GPS] GPS.n1xx apply calls finished.")
+        
         n1._c <- rep(n1._mat, times=length(n.1_mat))
         n.1_c <- rep(n.1_mat, each=length(n1._mat))
+        
+        print("[GPS] GPS.n1xx rep calls finished.")
+        
         E_c <- n1._c * n.1_c / N
+        print("[GPS] GPS.E_c call finished.")
+        
         n11_c <- as.vector(data_cont)
+
+        print("[GPS] GPS.nlm is running...")
         
         p_out <-suppressWarnings(nlm(.lik2NB, p=PRIOR.INIT, n11=n11_c, E=E_c, iterlim=500))
       }
@@ -55,7 +75,7 @@
     Nb.Cell <- length(n11)
     post.H0 <- vector(length=Nb.Cell)
     
-    
+    print("[GPS] GPS.calculating - Posterior probability of the null hypothesis")
     # Posterior probability of the null hypothesis
     Q <- PRIOR.PARAM[5]*dnbinom(n11,size=PRIOR.PARAM[1],prob=PRIOR.PARAM[2]/(PRIOR.PARAM[2]+E)) / 
       (PRIOR.PARAM[5]*dnbinom(n11,size=PRIOR.PARAM[1],prob=PRIOR.PARAM[2]/(PRIOR.PARAM[2]+E)) + (1-PRIOR.PARAM[5])* 
@@ -74,6 +94,7 @@
     
     # Calculation of the Lower Bound. (VALUEbis is former LBQ)
     LB <- .QuantileDuMouchel(0.05,Q,PRIOR.PARAM[1]+n11,PRIOR.PARAM[2]+E,PRIOR.PARAM[3]+n11,PRIOR.PARAM[4]+E)
+    UB <- .QuantileDuMouchel(0.95,Q,PRIOR.PARAM[1]+n11,PRIOR.PARAM[2]+E,PRIOR.PARAM[3]+n11,PRIOR.PARAM[4]+E)
     
     
     # Assignment based on the method (pp/postE/LB)
@@ -89,6 +110,8 @@
       Sp <- rev(cumsum(post.H0[order(1-RankStat)])) / (Nb.Cell - sum(1-post.H0))
     }
     if (RANKSTAT==2 | RANKSTAT==3) {
+      print("[GPS] GPS.calculating - Handling RankStat")
+      
       FDR <- (cumsum(post.H0[order(RankStat,decreasing=TRUE)]) / (1:length(post.H0)))
       FNR <- rev(cumsum((1-post.H0)[order(1-RankStat,decreasing=TRUE)])) / (Nb.Cell - 1:length(post.H0))
       Se <- cumsum((1-post.H0)[order(RankStat,decreasing=TRUE)]) / (sum(1-post.H0))
@@ -160,11 +183,14 @@
                                     n1.[order(RankStat,decreasing=TRUE)],
                                     n.1[order(RankStat,decreasing=TRUE)],
                                     FDR, FNR, Se, Sp,
-                                    post.H0[order(RankStat,decreasing=TRUE)] )
+                                    post.H0[order(RankStat,decreasing=TRUE)],
+                                    postE[order(RankStat, decreasing=TRUE)],
+                                    LB[order(RankStat, decreasing=TRUE)],
+                                    UB[order(RankStat, decreasing=TRUE)])
       if (RANKSTAT==2) colnames(RES$ALLSIGNALS) <- c("drug","event","count","expected count",
-                                                     "Q_0.05(lambda)","n11/E","drug margin","event margin","FDR","FNR","Se","Sp","postH0")
+                                                     "Q_0.05(lambda)","n11/E","drug margin","event margin","FDR","FNR","Se","Sp","postH0","postE","LB","UB")
       if (RANKSTAT==3) colnames(RES$ALLSIGNALS) <- c("drug","event","count","expected count",
-                                                     "post E(Lambda)","n11/E","drug margin","event margin","FDR","FNR","Se","Sp","postH0")
+                                                     "post E(Lambda)","n11/E","drug margin","event margin","FDR","FNR","Se","Sp","postH0","postE","LB","UB")
       
     }
     
@@ -182,6 +208,8 @@
   }
 
 .QuantileDuMouchel<-function(Seuil,Q,a1,b1,a2,b2) {
+  print("[GPS] GPS.QuantileDuMouchel - Initializing.")
+  
   m<-rep(-100000,length(Q))
   M<-rep(100000,length(Q))
   x<-rep(1,length(Q))
@@ -194,7 +222,10 @@
     x<-xnew
     Cout<-.FCoutQuantileDuMouchel(x,Seuil,Q,a1,b1,a2,b2)
   }
+  print("[GPS] GPS.QuantileDuMouchel - Done.")
+  
   x
+  
 }
 .FCoutQuantileDuMouchel<-function(p,Seuil,Q,a1,b1,a2,b2) {
   Q*pgamma(p,shape=a1,rate=b1)+(1-Q)*pgamma(p,shape=a2,rate=b2)-Seuil
